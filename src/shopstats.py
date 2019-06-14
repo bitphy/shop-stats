@@ -126,6 +126,7 @@ filename_templates = {
         'csv': 'shopstats_%s.csv',
         'malformed_chart': 'malformed_%s.png',
         'billing_chart': 'billing_%s.png',
+        'dup_chart': 'distinct_%s.png',
         }
 
 def get_filename(base):
@@ -478,6 +479,8 @@ if __name__ == "__main__":
     save_sales_stats_chart(df, get_filename('billing_chart'))
     print("Sales stats chart saved at %s" % get_filename('billing_chart'))
 
+    save_duplicated_stats_chart(df, get_filename('dup_chart'))
+    print("Duplicated stats chart saved at %s" % get_filename('dup_chart'))
 
 
 
