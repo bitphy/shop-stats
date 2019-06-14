@@ -14,7 +14,7 @@ Create a file named bitphyaccess.json in src/ containing:
     {
         "url_base":  "http://api.dev.bitphy.es/v2.0",
         "headers": {
-            "Authorization": "Bearer «place here your access tocken»",
+            "Authorization": "Bearer «place here your access token»",
             "Cache-Control": "no-cache"
         }
     }
