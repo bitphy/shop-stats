@@ -16,19 +16,25 @@ class MockResponse:
         self.headers = headers if headers else { 'content-type': 'application/json; charset=utf-8' }
         self.text = text
 
+
 def build_mock_request(contents):
     """ given a list of contents (str) to be return by a mocked request
         it returns a function that will deliver each entry of the contents """
+
 
     def generator(contents):
         for c in contents:
             yield c
     gen = generator(contents)
+
+
     def mock_request(*args, **kwargs):
         nonlocal gen
         return MockResponse(text=next(gen))
     return mock_request
 
+
+# Tests
 
 def test_response_is_ok_when_status_code_401():
     response = MockResponse(status_code=401)
@@ -46,11 +52,8 @@ def test_response_is_ok_when_everything_is_ok():
 
 
 def test_get_shops_when_none(monkeypatch):
-    contents = '[{ "id": "anychain", "shops": [] }]'
-
-
-    def mock_request(*args, **kwargs):
-        return MockResponse(text=contents)
+    content_list = ['[{ "id": "anychain", "shops": [] }]']
+    mock_request = build_mock_request(content_list)
     monkeypatch.setattr(requests, 'request', mock_request)
     expected = []
     found = get_shops()
@@ -58,11 +61,8 @@ def test_get_shops_when_none(monkeypatch):
 
 
 def test_get_shops_when_one(monkeypatch):
-    contents = '[{ "id": "chain_1", "shops": [ {"id": "shop_id_1", "name":"shop_name_1"} ] }]'
-
-
-    def mock_request(*args, **kwargs):
-        return MockResponse(text=contents)
+    content_list = ['[{ "id": "chain_1", "shops": [ {"id": "shop_id_1", "name":"shop_name_1"} ] }]']
+    mock_request = build_mock_request(content_list)
     monkeypatch.setattr(requests, 'request', mock_request)
     expected = [ ('chain_1', 'shop_id_1', 'shop_name_1') ]
     found = get_shops()
@@ -70,16 +70,16 @@ def test_get_shops_when_one(monkeypatch):
 
 
 def test_get_shops_when_some(monkeypatch):
-    contents = '''[{ "id": "chain_1", "shops": [
+    content_list = ['''[{ "id": "chain_1", "shops": [
                         {"id": "shop_id_1", "name":"shop_name_1"},
                         {"id": "shop_id_2", "name":"shop_name_2"},
                         {"id": "shop_id_3", "name":"shop_name_3"}
-                     ] }]'''
+                     ] }]''']
 
 
-    def mock_request(*args, **kwargs):
-        return MockResponse(text=contents)
+    mock_request = build_mock_request(content_list)
     monkeypatch.setattr(requests, 'request', mock_request)
+
     expected = [ ('chain_1', 'shop_id_1', 'shop_name_1'),
                  ('chain_1', 'shop_id_2', 'shop_name_2'),
                  ('chain_1', 'shop_id_3', 'shop_name_3') ]
@@ -88,16 +88,15 @@ def test_get_shops_when_some(monkeypatch):
 
 
 def test_get_shops_when_two_chains(monkeypatch):
-    contents = '''[{ "id": "chain_1", "shops": [
+    content_list = [ '''[{ "id": "chain_1", "shops": [
                         {"id": "shop_id_1", "name":"shop_name_1"},
                         {"id": "shop_id_2", "name":"shop_name_2"}]},
                    { "id": "chain_2", "shops": [
                         {"id": "shop_id_3", "name":"shop_name_3"}
-                     ] }]'''
+                     ] }]''' ]
 
 
-    def mock_request(*args, **kwargs):
-        return MockResponse(text=contents)
+    mock_request = build_mock_request(content_list)
     monkeypatch.setattr(requests, 'request', mock_request)
     expected = [ ('chain_1', 'shop_id_1', 'shop_name_1'),
                  ('chain_1', 'shop_id_2', 'shop_name_2'),
@@ -106,8 +105,9 @@ def test_get_shops_when_two_chains(monkeypatch):
     assert expected == found
 
 
-
 def test_generate_dataframe_when_response_error(monkeypatch):
+
+
     def mock_request(*args, **kwargs):
         return MockResponse(status_code=400)
 
@@ -124,18 +124,18 @@ def test_generate_dataframe_when_response_error(monkeypatch):
     found = generate_dataframe(nodepoint_specs)
     pd.testing.assert_frame_equal(expected, found, check_dtype=False)
 
-def test_generate_dataframe_when_no_chain(monkeypatch):
-    contents = '[]'
 
-    def mock_request(*args, **kwargs):
-        return MockResponse(text=contents)
+def test_generate_dataframe_when_no_chain(monkeypatch):
+    content_list = ['[]']
 
     nodepoint_specs = [
             { "name": "products", "type": "raw", "column_suffix": "distinct", "equality_key": "originalId" },
             { "name": "sellers", "type": "raw", "column_suffix": "distinct", "equality_key": "originalId" },
         ]
 
+    mock_request = build_mock_request(content_list)
     monkeypatch.setattr(requests, 'request', mock_request)
+
     expected = pd.DataFrame(columns=[
         'chain_id', 'shop_id', 'shop_name',
         'products_count', 'products_distinct', 'products_malformed',
@@ -146,16 +146,16 @@ def test_generate_dataframe_when_no_chain(monkeypatch):
 
 
 def test_generate_dataframe_when_badformed_response(monkeypatch):
-    contents = '[{}]'
+    content_list = ['[{}]']
 
-    def mock_request(*args, **kwargs):
-        return MockResponse(text=contents)
-
-    monkeypatch.setattr(requests, 'request', mock_request)
     nodepoint_specs = [
             { "name": "products", "type": "raw", "column_suffix": "distinct", "equality_key": "originalId" },
             { "name": "sellers", "type": "raw", "column_suffix": "distinct", "equality_key": "originalId" },
         ]
+
+    mock_request = build_mock_request(content_list)
+    monkeypatch.setattr(requests, 'request', mock_request)
+
     expected = pd.DataFrame(columns=[
         'chain_id', 'shop_id', 'shop_name',
         'products_count', 'products_distinct', 'products_malformed',
@@ -169,49 +169,22 @@ def test_generate_dataframe_when_no_shops(monkeypatch):
     content_list = [
             '[{ "id": "anychain", "shops": [] }]'
             ]
-    num_content = 0     # next content to deliver by a request
+
     nodepoint_specs = [
             { "name": "products", "type": "raw", "column_suffix": "distinct", "equality_key": "originalId" },
             { "name": "sellers", "type": "raw", "column_suffix": "distinct", "equality_key": "originalId" },
         ]
 
 
-    def mock_request(*args, **kwargs):
-        nonlocal num_content
-        response = MockResponse(text=content_list[num_content])
-        num_content += 1
-        return response
 
+    mock_request = build_mock_request(content_list)
     monkeypatch.setattr(requests, 'request', mock_request)
+
     expected = pd.DataFrame(columns=[
         'chain_id', 'shop_id', 'shop_name',
         'products_count', 'products_distinct', 'products_malformed',
         'sellers_count', 'sellers_distinct', 'sellers_malformed',
         ])
-    found = generate_dataframe(nodepoint_specs)
-    pd.testing.assert_frame_equal(expected, found, check_dtype=False)
-
-
-
-def test_generate_dataframe_when_one_shop_one_nodepoint_with_gen(monkeypatch):
-    content_list = [
-            '[{ "id": "chain_1", "shops": [ {"id": "shop_id_1", "name":"shop_name_1"} ] }]',
-            '''[
-                    { "originalId": "oid1", "name":"name1" },
-                    { "originalId": "oid1", "name":"name1" },
-                    { "id": "badentry" },
-                    { "originalId": "oid2", "name":"name2" }
-                ]'''
-            ]
-    nodepoint_specs = [ { "name": "sellers", "type": "raw", "column_suffix": "distinct", "equality_key": "originalId" }, ]
-
-    mock_request = build_mock_request(content_list)
-    monkeypatch.setattr(requests, 'request', mock_request)
-
-    expected = pd.DataFrame([['chain_1', 'shop_id_1', 'shop_name_1', 3, 2, 1]],
-            columns = ['chain_id', 'shop_id', 'shop_name',
-                'sellers_count', 'sellers_distinct', 'sellers_malformed', ])
-
     found = generate_dataframe(nodepoint_specs)
     pd.testing.assert_frame_equal(expected, found, check_dtype=False)
 
@@ -226,18 +199,11 @@ def test_generate_dataframe_when_one_shop_one_nodepoint(monkeypatch):
                     { "originalId": "oid2", "name":"name2" }
                 ]'''
             ]
-    num_content = 0     # next content to deliver by a request
-
     nodepoint_specs = [ { "name": "sellers", "type": "raw", "column_suffix": "distinct", "equality_key": "originalId" }, ]
 
-
-    def mock_request(*args, **kwargs):
-        nonlocal num_content
-        response = MockResponse(text=content_list[num_content])
-        num_content += 1
-        return response
-
+    mock_request = build_mock_request(content_list)
     monkeypatch.setattr(requests, 'request', mock_request)
+
     expected = pd.DataFrame([['chain_1', 'shop_id_1', 'shop_name_1', 3, 2, 1]],
             columns = ['chain_id', 'shop_id', 'shop_name',
                 'sellers_count', 'sellers_distinct', 'sellers_malformed', ])
@@ -271,20 +237,16 @@ def test_generate_dataframe_when_many_shop_many_nodepoint(monkeypatch):
                     { "whatis": "sellers_2", "originalId": "oid2", "name":"name2" }
                 ]''',
             ]
-    num_content = 0     # next content to deliver by a request
+
     nodepoint_specs = [
             { "name": "products", "type": "raw", "column_suffix": "distinct", "equality_key": "originalId" },
             { "name": "sellers", "type": "raw", "column_suffix": "distinct", "equality_key": "originalId" },
         ]
 
 
-    def mock_request(*args, **kwargs):
-        nonlocal num_content
-        response = MockResponse(text=content_list[num_content])
-        num_content += 1
-        return response
-
+    mock_request = build_mock_request(content_list)
     monkeypatch.setattr(requests, 'request', mock_request)
+
     expected = pd.DataFrame([
         ['chain_1', 'shop_id_1', 'shop_name_1', 3, 2, 0, 3, 2, 1],
         ['chain_1', 'shop_id_2', 'shop_name_2', 1, 1, 0, 2, 2, 0],
@@ -307,18 +269,12 @@ def test_generate_dataframe_when_aggregation_nodepoint_one_entry_no_subkey(monke
                     { "billing": 111 }
                 ]'''
             ]
-    num_content = 0     # next content to deliver by a request
-
-    def mock_request(*args, **kwargs):
-        nonlocal num_content
-        response = MockResponse(text=content_list[num_content])
-        num_content += 1
-        return response
 
     nodepoint_specs = [
             { 'name': 'test', 'type': 'aggregation', 'aggregation_key': 'billing', 'column_suffix': 'billing', 'subkey': None }
             ]
 
+    mock_request = build_mock_request(content_list)
     monkeypatch.setattr(requests, 'request', mock_request)
 
     expected = pd.DataFrame([
@@ -328,7 +284,6 @@ def test_generate_dataframe_when_aggregation_nodepoint_one_entry_no_subkey(monke
             'test_count', 'test_billing', 'test_malformed' ])
     found = generate_dataframe(nodepoint_specs)
     pd.testing.assert_frame_equal(expected, found, check_dtype=False)
-
 
 
 def test_generate_dataframe_when_aggregation_nodepoint_many_entries_no_subkey(monkeypatch):
@@ -341,18 +296,12 @@ def test_generate_dataframe_when_aggregation_nodepoint_many_entries_no_subkey(mo
                     { "billing": 222 }
                 ]'''
             ]
-    num_content = 0     # next content to deliver by a request
-
-    def mock_request(*args, **kwargs):
-        nonlocal num_content
-        response = MockResponse(text=content_list[num_content])
-        num_content += 1
-        return response
 
     nodepoint_specs = [
             { 'name': 'test', 'type': 'aggregation', 'aggregation_key': 'billing', 'column_suffix': 'billing', 'subkey': None }
             ]
 
+    mock_request = build_mock_request(content_list)
     monkeypatch.setattr(requests, 'request', mock_request)
 
     expected = pd.DataFrame([
@@ -363,6 +312,7 @@ def test_generate_dataframe_when_aggregation_nodepoint_many_entries_no_subkey(mo
     found = generate_dataframe(nodepoint_specs)
     pd.testing.assert_frame_equal(expected, found, check_dtype=False)
 
+
 def test_generate_dataframe_when_aggregation_nodepoint_one_entry_with_subkey(monkeypatch):
     content_list = [
             '''[{ "id": "chain_1", "shops": [
@@ -372,18 +322,12 @@ def test_generate_dataframe_when_aggregation_nodepoint_one_entry_with_subkey(mon
                     { "sales": [{ "billing": 111 }] }
                 ]'''
             ]
-    num_content = 0     # next content to deliver by a request
-
-    def mock_request(*args, **kwargs):
-        nonlocal num_content
-        response = MockResponse(text=content_list[num_content])
-        num_content += 1
-        return response
 
     nodepoint_specs = [
             { 'name': 'test', 'type': 'aggregation', 'aggregation_key': 'billing', 'column_suffix': 'billing', 'subkey': 'sales' }
             ]
 
+    mock_request = build_mock_request(content_list)
     monkeypatch.setattr(requests, 'request', mock_request)
 
     expected = pd.DataFrame([
@@ -408,18 +352,12 @@ def test_generate_dataframe_when_aggregation_nodepoint_with_many_entries_same_su
                     ] }
                 ]'''
             ]
-    num_content = 0     # next content to deliver by a request
-
-    def mock_request(*args, **kwargs):
-        nonlocal num_content
-        response = MockResponse(text=content_list[num_content])
-        num_content += 1
-        return response
 
     nodepoint_specs = [
             { 'name': 'test', 'type': 'aggregation', 'aggregation_key': 'billing', 'column_suffix': 'billing', 'subkey': 'sales' }
             ]
 
+    mock_request = build_mock_request(content_list)
     monkeypatch.setattr(requests, 'request', mock_request)
 
     expected = pd.DataFrame([
@@ -429,6 +367,7 @@ def test_generate_dataframe_when_aggregation_nodepoint_with_many_entries_same_su
             'test_count', 'test_billing', 'test_malformed' ])
     found = generate_dataframe(nodepoint_specs)
     pd.testing.assert_frame_equal(expected, found, check_dtype=False)
+
 
 def test_generate_dataframe_when_aggregation_nodepoint_with_many_entries_different_subkey(monkeypatch):
     content_list = [
@@ -453,18 +392,12 @@ def test_generate_dataframe_when_aggregation_nodepoint_with_many_entries_differe
                     ] }
                 ]'''
             ]
-    num_content = 0     # next content to deliver by a request
-
-    def mock_request(*args, **kwargs):
-        nonlocal num_content
-        response = MockResponse(text=content_list[num_content])
-        num_content += 1
-        return response
 
     nodepoint_specs = [
             { 'name': 'test', 'type': 'aggregation', 'aggregation_key': 'billing', 'column_suffix': 'billing', 'subkey': 'sales' }
             ]
 
+    mock_request = build_mock_request(content_list)
     monkeypatch.setattr(requests, 'request', mock_request)
 
     expected = pd.DataFrame([
@@ -474,6 +407,7 @@ def test_generate_dataframe_when_aggregation_nodepoint_with_many_entries_differe
             'test_count', 'test_billing', 'test_malformed' ])
     found = generate_dataframe(nodepoint_specs)
     pd.testing.assert_frame_equal(expected, found, check_dtype=False)
+
 
 def test_generate_dataframe_when_aggregation_nodepoint_with_malformed_entry_no_subkey(monkeypatch):
     content_list = [
@@ -498,18 +432,12 @@ def test_generate_dataframe_when_aggregation_nodepoint_with_malformed_entry_no_s
                     ] }
                 ]'''
             ]
-    num_content = 0     # next content to deliver by a request
-
-    def mock_request(*args, **kwargs):
-        nonlocal num_content
-        response = MockResponse(text=content_list[num_content])
-        num_content += 1
-        return response
 
     nodepoint_specs = [
             { 'name': 'test', 'type': 'aggregation', 'aggregation_key': 'billing', 'column_suffix': 'billing', 'subkey': 'sales' }
             ]
 
+    mock_request = build_mock_request(content_list)
     monkeypatch.setattr(requests, 'request', mock_request)
 
     expected = pd.DataFrame([
@@ -544,18 +472,12 @@ def test_generate_dataframe_when_aggregation_nodepoint_with_malformed_entry_no_a
                     ] }
                 ]'''
             ]
-    num_content = 0     # next content to deliver by a request
-
-    def mock_request(*args, **kwargs):
-        nonlocal num_content
-        response = MockResponse(text=content_list[num_content])
-        num_content += 1
-        return response
 
     nodepoint_specs = [
             { 'name': 'test', 'type': 'aggregation', 'aggregation_key': 'billing', 'column_suffix': 'billing', 'subkey': 'sales' }
             ]
 
+    mock_request = build_mock_request(content_list)
     monkeypatch.setattr(requests, 'request', mock_request)
 
     expected = pd.DataFrame([
@@ -598,13 +520,6 @@ def test_generate_dataframe_when_aggregation_mani_nodepoints_same_shop(monkeypat
                 ]'''
 
             ]
-    num_content = 0     # next content to deliver by a request
-
-    def mock_request(*args, **kwargs):
-        nonlocal num_content
-        response = MockResponse(text=content_list[num_content])
-        num_content += 1
-        return response
 
     nodepoint_specs = [
             { 'name': 'test_1', 'type': 'aggregation', 'aggregation_key': 'billing', 'column_suffix': 'billing', 'subkey': 'sales' },
@@ -612,6 +527,7 @@ def test_generate_dataframe_when_aggregation_mani_nodepoints_same_shop(monkeypat
             { 'name': 'test_3', 'type': 'aggregation', 'aggregation_key': 'billing', 'column_suffix': 'billing', 'subkey': None }
             ]
 
+    mock_request = build_mock_request(content_list)
     monkeypatch.setattr(requests, 'request', mock_request)
 
     expected = pd.DataFrame([
@@ -624,9 +540,6 @@ def test_generate_dataframe_when_aggregation_mani_nodepoints_same_shop(monkeypat
             ])
     found = generate_dataframe(nodepoint_specs)
     pd.testing.assert_frame_equal(expected, found, check_dtype=False)
-
-
-
 
 
 def test_generate_dataframe_when_aggregation_many_nodepoints_many_shops_and_chains(monkeypatch):
@@ -694,20 +607,13 @@ def test_generate_dataframe_when_aggregation_many_nodepoints_many_shops_and_chai
 
 
             ]
-    num_content = 0     # next content to deliver by a request
-
-    def mock_request(*args, **kwargs):
-        nonlocal num_content
-        response = MockResponse(text=content_list[num_content])
-        num_content += 1
-        return response
-
     nodepoint_specs = [
             { 'name': 'test_1', 'type': 'aggregation', 'aggregation_key': 'billing', 'column_suffix': 'billing', 'subkey': 'sales' },
             { 'name': 'test_2', 'type': 'aggregation', 'aggregation_key': 'billing', 'column_suffix': 'billing', 'subkey': 'sales' },
             { 'name': 'test_3', 'type': 'aggregation', 'aggregation_key': 'billing', 'column_suffix': 'billing', 'subkey': None }
             ]
 
+    mock_request = build_mock_request(content_list)
     monkeypatch.setattr(requests, 'request', mock_request)
 
     expected = pd.DataFrame([
@@ -720,9 +626,9 @@ def test_generate_dataframe_when_aggregation_many_nodepoints_many_shops_and_chai
             'test_2_count', 'test_2_billing', 'test_2_malformed',
             'test_3_count', 'test_3_billing', 'test_3_malformed'
             ])
+
     found = generate_dataframe(nodepoint_specs)
     pd.testing.assert_frame_equal(expected, found, check_dtype=False)
-
 
 
 def test_generate_dataframe_when_raw_and_aggregation_many_nodepoints_many_shops_and_chains(monkeypatch):
@@ -784,13 +690,6 @@ def test_generate_dataframe_when_raw_and_aggregation_many_nodepoints_many_shops_
 
 
             ]
-    num_content = 0     # next content to deliver by a request
-
-    def mock_request(*args, **kwargs):
-        nonlocal num_content
-        response = MockResponse(text=content_list[num_content])
-        num_content += 1
-        return response
 
     nodepoint_specs = [
             { 'name': 'test_1', 'type': 'aggregation', 'aggregation_key': 'billing', 'column_suffix': 'billing', 'subkey': 'sales' },
@@ -798,6 +697,7 @@ def test_generate_dataframe_when_raw_and_aggregation_many_nodepoints_many_shops_
             { 'name': 'test_3', 'type': 'aggregation', 'aggregation_key': 'billing', 'column_suffix': 'billing', 'subkey': None }
             ]
 
+    mock_request = build_mock_request(content_list)
     monkeypatch.setattr(requests, 'request', mock_request)
 
     expected = pd.DataFrame([
@@ -810,6 +710,7 @@ def test_generate_dataframe_when_raw_and_aggregation_many_nodepoints_many_shops_
             'test_2_count', 'test_2_distinct', 'test_2_malformed',
             'test_3_count', 'test_3_billing', 'test_3_malformed'
             ])
+
     found = generate_dataframe(nodepoint_specs)
     pd.testing.assert_frame_equal(expected, found, check_dtype=False)
 
