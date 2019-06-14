@@ -30,8 +30,8 @@ def build_mock_request(contents):
     return mock_request
 
 
-def test_response_is_ok_when_status_code_300():
-    response = MockResponse(status_code=300)
+def test_response_is_ok_when_status_code_401():
+    response = MockResponse(status_code=401)
     assert not response_is_ok(response)
 
 
@@ -109,7 +109,7 @@ def test_get_shops_when_two_chains(monkeypatch):
 
 def test_generate_dataframe_when_response_error(monkeypatch):
     def mock_request(*args, **kwargs):
-        return MockResponse(status_code=300)
+        return MockResponse(status_code=400)
 
     monkeypatch.setattr(requests, 'request', mock_request)
     nodepoint_specs = [
