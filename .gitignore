@@ -1,0 +1,7 @@
+*.pyc
+*~
+.*.swp
+*.log
+bitphyaccess.json
+*.csv
+*.png
