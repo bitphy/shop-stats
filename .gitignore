@@ -1,7 +1,15 @@
 *.pyc
 *~
+.~*
 .*.swp
 *.log
 bitphyaccess.json
 *.csv
 *.png
+.idea/
+logs/
+__pycache__/
+.coverage
+.mypy_cache/
+venv/
+
