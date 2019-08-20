@@ -2,7 +2,7 @@
 """
     This script constructs a pandas DataFrame for the raw nodepoints
 """
-from typing import Dict
+from typing import Dict, Union
 import pandas as pd
 import numpy as np
 import seaborn as sns
@@ -12,6 +12,19 @@ import json
 import logging
 import datetime
 import sys
+
+from api_de_alberto import DateRanges, init_sqlalchemy_engine
+from historic_algorithm_generator import historic_generation
+from bitlog import init_logger
+
+ENG = init_sqlalchemy_engine()
+
+# Set up logging
+logger = init_logger(__name__, __file__)
+
+DATERANGES = [
+    DateRanges.monthly
+]
 
 # File containing bitphy api connection params
 api_params_filename = 'bitphyaccess.json'
@@ -101,6 +114,26 @@ entries_processors = {
 querystring = None
 
 
+def generate_shop_params(shop_id):
+    @historic_generation(shop_id=shop_id,
+                         query_table='CustomerStats',
+                         allowed_date_ranges=DATERANGES,
+                         engine=ENG)
+    def compose_querystring(start_date, end_date, date_range):
+        """Compose a querystring for each shop_id, using dates generator"""
+        query_string = {"dateStart": start_date, "dateEnd": end_date, "dateRange": date_range}
+        yield query_string
+
+    return compose_querystring()
+
+
+def get_current_param(shop_id):
+    iterator_params = generate_shop_params(shop_id)
+
+    for param in iterator_params:
+        yield param
+
+
 def get_querystring():
     """ returns the query params
         dateStart: first day of this month
@@ -132,7 +165,6 @@ filename_templates = {
 def get_filename(base):
     """ returns the required filename composed with the month and year """
     return filename_templates[base] % get_querystring()['dateStart'].strftime('%Y%m')
-
 
 # requests modules
 def response_is_ok(response):
@@ -173,12 +205,14 @@ def get_shops():
     chains = json.loads(response.text, encoding = 'utf-8')
     shops = []
     for chain in chains:
+        if chain['id'] != '8dqc9hhy9rqxko':
+            continue
         if 'id' not in chain:
-            logging.warning('chain_id not found in accessible-resources %s' , chain)
+            logger.warning('chain_id not found in accessible-resources %s' , chain)
             continue
         chain_id = chain['id']
         shops += [ (chain_id, shop['id'], shop['name']) for shop in chain.get('shops') ]
-    logging.info("\tshops: %s" % shops)
+    logger.info("\tshops: %s" % shops)
     return shops
 
 
@@ -194,12 +228,12 @@ def get_nodepoint_entries(chain_id, shop_id, nodepoint):
     url_base = api_params['url_base']
     headers = api_params['headers']
     url = '%s%s' % (url_base, nodepoint_url)
-    logging.info('Requesting: %s' % url)
-    response = requests.request("GET", url, headers=headers, params=get_querystring())
+    logger.info('Requesting: %s' % url)
+    response = requests.request("GET", url, headers=headers, params=get_current_param(shop_id))
     if not response_is_ok(response):
         return ('error', [])
     resultat = json.loads(response.text, encoding = 'utf-8')
-    logging.info('\tresultat: %s' % resultat)
+    logger.info('\tresultat: %s' % resultat)
     return ('ok', resultat)
 
 
@@ -208,7 +242,7 @@ def get_nodepoint_counters(chain_id, shop_id, nodepoint_spec):
     nodepoint_name = nodepoint_spec['name']
     (result, entries) = get_nodepoint_entries(chain_id, shop_id, nodepoint_name)
     if result == 'error':
-        logging.warning("get_nodepoint_counters(chain_id: %s, shop_id: %s, nodepoint: %s) An error was found with result '%s'" % (chain_id, shop_id, nodepoint_spec, entries))
+        logger.warning("get_nodepoint_counters(chain_id: %s, shop_id: %s, nodepoint: %s) An error was found with result '%s'" % (chain_id, shop_id, nodepoint_spec, entries))
         return (np.nan, np.nan, np.nan)
     return entries_processors[nodepoint_spec['type']](nodepoint_spec, entries)
 
