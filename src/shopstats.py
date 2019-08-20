@@ -114,24 +114,22 @@ entries_processors = {
 querystring = None
 
 
-def generate_shop_params(shop_id):
-    @historic_generation(shop_id=shop_id,
+def generate_shop_params():
+
+    """@historic_generation(shop_id=shop_id,
                          query_table='CustomerStats',
                          allowed_date_ranges=DATERANGES,
                          engine=ENG)
-    def compose_querystring(start_date, end_date, date_range):
+                         """
+    # params= start_date, end_date, date_range
+    def compose_querystring():
         """Compose a querystring for each shop_id, using dates generator"""
-        query_string = {"dateStart": start_date, "dateEnd": end_date, "dateRange": date_range}
-        yield query_string
+        query_string = [
+                        {"dateStart":'2019-06-01', "dateEnd": '2019-07-01', "dateRange": "3"},
+                        {"dateStart": '2019-07-01', "dateEnd": '2019-08-01', "dateRange": "3"}]
+        return query_string
 
     return compose_querystring()
-
-
-def get_current_param(shop_id):
-    iterator_params = generate_shop_params(shop_id)
-
-    for param in iterator_params:
-        yield param
 
 
 def get_querystring():
@@ -216,7 +214,7 @@ def get_shops():
     return shops
 
 
-def get_nodepoint_entries(chain_id, shop_id, nodepoint):
+def get_nodepoint_entries(chain_id, shop_id, nodepoint, filters):
     """ given a chain, a shop and a nodepoint
         it calls the API to get the corresponding entries.
         It returns the tuple
@@ -229,22 +227,25 @@ def get_nodepoint_entries(chain_id, shop_id, nodepoint):
     headers = api_params['headers']
     url = '%s%s' % (url_base, nodepoint_url)
     logger.info('Requesting: %s' % url)
-    response = requests.request("GET", url, headers=headers, params=get_current_param(shop_id))
+    response = requests.request("GET", url, headers=headers, params=filters)
     if not response_is_ok(response):
         return ('error', [])
     resultat = json.loads(response.text, encoding = 'utf-8')
-    logger.info('\tresultat: %s' % resultat)
+    # logger.info('\tresultat: %s' % resultat)
     return ('ok', resultat)
 
 
 def get_nodepoint_counters(chain_id, shop_id, nodepoint_spec):
     """ Computes the counters of a given nodepoint and returns them as a tuple """
     nodepoint_name = nodepoint_spec['name']
-    (result, entries) = get_nodepoint_entries(chain_id, shop_id, nodepoint_name)
-    if result == 'error':
-        logger.warning("get_nodepoint_counters(chain_id: %s, shop_id: %s, nodepoint: %s) An error was found with result '%s'" % (chain_id, shop_id, nodepoint_spec, entries))
-        return (np.nan, np.nan, np.nan)
-    return entries_processors[nodepoint_spec['type']](nodepoint_spec, entries)
+
+    iterator_params = generate_shop_params()
+    for current_param in iterator_params:
+        (result, entries) = get_nodepoint_entries(chain_id, shop_id, nodepoint_name, current_param)
+        if result == 'error':
+            logger.warning("get_nodepoint_counters(chain_id: %s, shop_id: %s, nodepoint: %s) An error was found with result '%s'" % (chain_id, shop_id, nodepoint_spec, entries))
+            return (np.nan, np.nan, np.nan)
+        yield entries_processors[nodepoint_spec['type']](nodepoint_spec, entries)
 
 
 def compose_nodepoint_column(nodepoint_spec):
@@ -278,13 +279,16 @@ def generate_dataframe(nodepoints_specs):
 
 
     def populate_counters(df, nodepoint_specs, shops):
+        df_temp = df.copy()
         for chain_id, shop_id, _ in shops:
             for nodepoint_spec in nodepoint_specs:
-                counters = get_nodepoint_counters(chain_id, shop_id, nodepoint_spec)
-                # add counters of current nodepoint
-                df.loc[df['shop_id'] == shop_id, compose_nodepoint_column(nodepoint_spec)] = counters
-
+                counters_iterator = get_nodepoint_counters(chain_id, shop_id, nodepoint_spec)
+                for counters in counters_iterator:
+                    # add counters of current nodepoint
+                    df_temp.loc[df_temp['shop_id'] == shop_id, compose_nodepoint_column(nodepoint_spec)] = counters
+                df = pd.concat([df, df_temp])
     shops = get_shops()
+    breakpoint()
     df = build_dataframe(shops, nodepoints_specs)
     populate_counters(df, nodepoints_specs, shops)
 
@@ -332,7 +336,7 @@ def save_malformed_stats_chart(shopstats, filename, date_title = get_current_mon
                 [ '%s_malformed'%nodepoint
                   for nodepoint in columns ]]
         values = values.set_index(['index'])
-        values = values.astype('int')
+        values = values.astype('float')
 
         # fake data for testing
         # comment the following lines out to get some wrong billings
