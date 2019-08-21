@@ -2,7 +2,7 @@
 """
     This script constructs a pandas DataFrame for the raw nodepoints
 """
-from typing import Dict, Union
+from typing import Dict, Union, List
 import pandas as pd
 import numpy as np
 import seaborn as sns
@@ -113,9 +113,10 @@ entries_processors = {
 # ATTENTION: some queries do not need all the params included in this query
 querystring = None
 
-
+# generate_shop_params(shop_id)
 def generate_shop_params():
-
+    """Dado un shop_id, genera un histórico de fechas,
+    para hacer las peticiones necesarias en cada shop, de mes a mes"""
     """@historic_generation(shop_id=shop_id,
                          query_table='CustomerStats',
                          allowed_date_ranges=DATERANGES,
@@ -235,17 +236,16 @@ def get_nodepoint_entries(chain_id, shop_id, nodepoint, filters):
     return ('ok', resultat)
 
 
-def get_nodepoint_counters(chain_id, shop_id, nodepoint_spec):
+def get_nodepoint_counters(chain_id, shop_id, nodepoint_spec, current_param):
     """ Computes the counters of a given nodepoint and returns them as a tuple """
     nodepoint_name = nodepoint_spec['name']
 
-    iterator_params = generate_shop_params()
-    for current_param in iterator_params:
-        (result, entries) = get_nodepoint_entries(chain_id, shop_id, nodepoint_name, current_param)
-        if result == 'error':
-            logger.warning("get_nodepoint_counters(chain_id: %s, shop_id: %s, nodepoint: %s) An error was found with result '%s'" % (chain_id, shop_id, nodepoint_spec, entries))
-            return (np.nan, np.nan, np.nan)
-        yield entries_processors[nodepoint_spec['type']](nodepoint_spec, entries)
+    (result, entries) = get_nodepoint_entries(chain_id, shop_id, nodepoint_name, current_param)
+    if result == 'error':
+        logger.warning("get_nodepoint_counters(chain_id: %s, shop_id: %s, nodepoint: %s) An error was found with result '%s'" % (chain_id, shop_id, nodepoint_spec, entries))
+        return (np.nan, np.nan, np.nan)
+
+    return entries_processors[nodepoint_spec['type']](nodepoint_spec, entries)
 
 
 def compose_nodepoint_column(nodepoint_spec):
@@ -261,38 +261,87 @@ def compose_nodepoint_column(nodepoint_spec):
     return [ '%s_%s' % (nodepoint_name, column) for column in ('count', column_suffix, 'malformed') ]
 
 
-def generate_dataframe(nodepoints_specs):
+def compose_initial_rows_data() -> List[Dict]:
+    """Compose a list of dictionaries with the detailed data corresponding
+    to each shop ('date', 'chain_id', 'shop_id', 'shop_name').
+    It will be used to build a base for the final data frame of data.
+    """
+    initial_data: List[Dict] = []
+    for chain_id, shop_id, shop_name in get_shops():
+        dates_ranges = generate_shop_params()
+        for dates in dates_ranges:
+            row = {'date': dates['dateStart'],
+                   'chain_id': chain_id,
+                   'shop_id': shop_id,
+                   'shop_name': shop_name}
+            initial_data.append(row)
+    return initial_data
+
+
+def generate_dataframe(nodepoints_specs) -> pd.DataFrame:
     """ given a list with nodepoints specs
         it generates a dataframe containing
         a row for each shop of the chain and
         for each raw nodepoint: three columns (count, distinct, malformed)
     """
 
-
-    def build_dataframe(shops, nodepoint_specs):
-        initial_data = [ { 'chain_id': chain_id, 'shop_id': shop_id, 'shop_name': shop_name} for chain_id, shop_id, shop_name in shops ]
-        columns = [ 'chain_id', 'shop_id', 'shop_name' ]
+    def build_dataframe(nodepoint_specs) -> pd.DataFrame:
+        """Build the columns of the dataframe,
+        returns the empty dataframe, except for the initial columns
+        ['date', 'chain_id', 'shop_id', 'shop_name']
+        that are filled in with their corresponding data,
+        generating the necessary rows in the dataframe."""
+        initial_data = compose_initial_rows_data()
+        columns = ['date', 'chain_id', 'shop_id', 'shop_name']
         for nodepoint_spec in nodepoint_specs:
             columns += compose_nodepoint_column(nodepoint_spec)
-        df = pd.DataFrame(initial_data, columns = columns, dtype=np.int64)
+        df_initial = pd.DataFrame(initial_data, columns=columns, dtype=np.int64)
+
+        return df_initial
+
+    def populate_shops(nodepoint_specs) -> pd.DataFrame:
+        """For each shop, get the data and add to the dataframe of all stores
+        """
+        shops = get_shops()
+        df_shops = build_dataframe(nodepoints_specs)
+        for chain_id, shop_id, _ in shops:
+            df_shop = df_shops.copy()
+            df_shop = populate_counters_by_shop(df_shop, nodepoint_specs, chain_id, shop_id)
+            df_shops = df_shops.combine_first(df_shop)
+
+        return df_shops
+
+    def populate_counters_by_shop(df, nodepoint_specs,
+                                  chain_id, shop_id) -> pd.DataFrame:
+        """Fill in the month-to-month dataframe of a single shop,
+        and finally combine it with the shop's base dataframe
+        """
+        df_shop = df.copy()
+        df_month = df.copy()
+        # TODO aquí habria de pasar un shop_id como parámetro cuando se use historic generator
+        date_ranges = generate_shop_params()
+        for param in date_ranges:
+            for nodepoint_spec in nodepoint_specs:
+                # df_month will be filled in every lap.
+                df_month = populate_counters_by_month(df_month, chain_id, shop_id, nodepoint_spec, param)
+            df_shop = df_shop.combine_first(df_month)
+        return df_shop
+
+    def populate_counters_by_month(df, chain_id, shop_id,
+                                   nodepoint_spec, param) -> pd.DataFrame:
+        """Get columns with entries for an nodepoint_spec and
+        enter them in the given dataframe."""
+
+        counters = get_nodepoint_counters(chain_id, shop_id, nodepoint_spec, param)
+        # add counters of current nodepoint
+        df_mask = (df['shop_id'] == shop_id) & (df['date'] == param['dateStart']),\
+            compose_nodepoint_column(nodepoint_spec)
+        df.loc[df_mask] = counters
         return df
 
+    df_shops = populate_shops(nodepoints_specs)
 
-    def populate_counters(df, nodepoint_specs, shops):
-        df_temp = df.copy()
-        for chain_id, shop_id, _ in shops:
-            for nodepoint_spec in nodepoint_specs:
-                counters_iterator = get_nodepoint_counters(chain_id, shop_id, nodepoint_spec)
-                for counters in counters_iterator:
-                    # add counters of current nodepoint
-                    df_temp.loc[df_temp['shop_id'] == shop_id, compose_nodepoint_column(nodepoint_spec)] = counters
-                df = pd.concat([df, df_temp])
-    shops = get_shops()
-    breakpoint()
-    df = build_dataframe(shops, nodepoints_specs)
-    populate_counters(df, nodepoints_specs, shops)
-
-    return df
+    return df_shops
 
 
 def sort_columns(df):
@@ -336,7 +385,7 @@ def save_malformed_stats_chart(shopstats, filename, date_title = get_current_mon
                 [ '%s_malformed'%nodepoint
                   for nodepoint in columns ]]
         values = values.set_index(['index'])
-        values = values.astype('float')
+        values = values.astype('int')
 
         # fake data for testing
         # comment the following lines out to get some wrong billings
