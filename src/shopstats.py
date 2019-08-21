@@ -126,8 +126,12 @@ def generate_shop_params():
     def compose_querystring():
         """Compose a querystring for each shop_id, using dates generator"""
         query_string = [
-                        {"dateStart":'2019-06-01', "dateEnd": '2019-07-01', "dateRange": "3"},
-                        {"dateStart": '2019-07-01', "dateEnd": '2019-08-01', "dateRange": "3"}]
+                        {"dateStart": '2019-03-01', "dateEnd": '2019-04-01', "dateRange": "3"},
+                        {"dateStart": '2019-04-01', "dateEnd": '2019-05-01', "dateRange": "3"},
+                        {"dateStart": '2019-05-01', "dateEnd": '2019-06-01', "dateRange": "3"},
+                        {"dateStart": '2019-06-01', "dateEnd": '2019-07-01', "dateRange": "3"},
+                        {"dateStart": '2019-07-01', "dateEnd": '2019-08-01', "dateRange": "3"},
+                        {"dateStart": '2019-08-01', "dateEnd": '2019-09-01', "dateRange": "3"}]
         return query_string
 
     return compose_querystring()
@@ -164,6 +168,7 @@ filename_templates = {
 def get_filename(base):
     """ returns the required filename composed with the month and year """
     return filename_templates[base] % get_querystring()['dateStart'].strftime('%Y%m')
+
 
 # requests modules
 def response_is_ok(response):
@@ -380,7 +385,7 @@ def save_malformed_stats_chart(shopstats, filename, date_title = get_current_mon
                               if column.endswith('_malformed')]
 
         values = pd.DataFrame(columns=['index'] + columns)
-        values['index'] = shopstats.apply(lambda row: "%s/%s" % (row.chain_id, row.shop_id), axis=1)
+        values['index'] = shopstats.apply(lambda row: "%s/%s/%s" % (row.chain_id, row.shop_id, row.date), axis=1)
         values[columns] = shopstats[
                 [ '%s_malformed'%nodepoint
                   for nodepoint in columns ]]
@@ -439,7 +444,7 @@ def save_sales_stats_chart(shopstats: pd.DataFrame,
                     for column in shopstats
                     if column.endswith('_billing')]
         values = pd.DataFrame(columns=['index'] + columns)
-        values['index'] = shopstats.apply(lambda row: "%s/%s" % (row.chain_id, row.shop_id), axis=1)
+        values['index'] = shopstats.apply(lambda row: "%s/%s/%s" % (row.chain_id, row.shop_id, row.date), axis=1)
         values[columns] = shopstats[
                 ['%s_billing' % nodepoint
                  for nodepoint in columns]]
@@ -520,7 +525,7 @@ def save_duplicated_stats_chart(shopstats: pd.DataFrame,
         #   values: contents to be shown in the cells
         #   base:   contents to be considered to decide highlighting the cell
         values = pd.DataFrame(columns=['index'] + raw_nodepoints)
-        values['index'] = shopstats.apply(lambda row: "%s/%s" % (row.chain_id, row.shop_id), axis=1)
+        values['index'] = shopstats.apply(lambda row: "%s/%s/%s" % (row.chain_id, row.shop_id, row.date), axis=1)
         base = values.copy()
         for nodepoint in raw_nodepoints:
             values[nodepoint] = shopstats['%s_distinct' % nodepoint].astype('int').astype("str") + '/' + shopstats['%s_count' % nodepoint].astype('int').astype("str")
