@@ -36,7 +36,7 @@ api_params = None
 #   'raw': intended for raw nodepoints.
 #   'sales': intended for sales nodepoints.
 nodepoint_specs = [
-        { "name": "customers"                , "type": "raw"         , "equality_key": "originalId" , "column_suffix": "distinct" }    ,
+        # { "name": "customers"                , "type": "raw"         , "equality_key": "originalId" , "column_suffix": "distinct" }    ,
         { "name": "product-categories"       , "type": "raw"         , "equality_key": "originalId" , "column_suffix": "distinct" }    ,
         { "name": "products"                 , "type": "raw"         , "equality_key": "originalId" , "column_suffix": "distinct" }    ,
         { "name": "sellers"                  , "type": "raw"         , "equality_key": "originalId" , "column_suffix": "distinct" }    ,
@@ -126,12 +126,12 @@ def generate_shop_params():
     def compose_querystring():
         """Compose a querystring for each shop_id, using dates generator"""
         query_string = [
-                        {"dateStart": '2019-03-01', "dateEnd": '2019-04-01', "dateRange": "3"},
-                        {"dateStart": '2019-04-01', "dateEnd": '2019-05-01', "dateRange": "3"},
-                        {"dateStart": '2019-05-01', "dateEnd": '2019-06-01', "dateRange": "3"},
-                        {"dateStart": '2019-06-01', "dateEnd": '2019-07-01', "dateRange": "3"},
-                        {"dateStart": '2019-07-01', "dateEnd": '2019-08-01', "dateRange": "3"},
-                        {"dateStart": '2019-08-01', "dateEnd": '2019-09-01', "dateRange": "3"}]
+                        {"dateStart": '2019-04-01', "dateEnd": '2019-04-30', "dateRange": "3"},
+                        {"dateStart": '2019-05-01', "dateEnd": '2019-05-31', "dateRange": "3"},
+                        {"dateStart": '2019-06-01', "dateEnd": '2019-06-30', "dateRange": "3"},
+                        {"dateStart": '2019-07-01', "dateEnd": '2019-07-31', "dateRange": "3"},
+                        {"dateStart": '2019-08-01', "dateEnd": '2019-08-31', "dateRange": "3"},
+                        {"dateStart": '2019-09-01', "dateEnd": '2019-09-30', "dateRange": "3"}]
         return query_string
 
     return compose_querystring()
@@ -209,13 +209,17 @@ def get_shops():
     chains = json.loads(response.text, encoding = 'utf-8')
     shops = []
     for chain in chains:
-        if chain['id'] != '8dqc9hhy9rqxko':
+        if chain['id'] != 'pbnhlongag6ata':
             continue
         if 'id' not in chain:
             logger.warning('chain_id not found in accessible-resources %s' , chain)
             continue
         chain_id = chain['id']
-        shops += [ (chain_id, shop['id'], shop['name']) for shop in chain.get('shops') ]
+        for shop in chain.get('shops'):
+            if shop['id'] != '91zdnpvz08x68q':
+                continue
+            shops.append((chain_id, shop['id'], shop['name']))
+        # shops += [ (chain_id, shop['id'], shop['name']) for shop in chain.get('shops') ]
     logger.info("\tshops: %s" % shops)
     return shops
 
