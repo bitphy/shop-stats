@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import requests
 import json
 import logging
-import datetime
+import datetime as dt
 import sys
 
 from api_de_alberto import DateRanges, init_sqlalchemy_engine
@@ -126,12 +126,9 @@ def generate_shop_params():
     def compose_querystring():
         """Compose a querystring for each shop_id, using dates generator"""
         query_string = [
-                        {"dateStart": '2019-04-01', "dateEnd": '2019-04-30', "dateRange": "3"},
-                        {"dateStart": '2019-05-01', "dateEnd": '2019-05-31', "dateRange": "3"},
-                        {"dateStart": '2019-06-01', "dateEnd": '2019-06-30', "dateRange": "3"},
-                        {"dateStart": '2019-07-01', "dateEnd": '2019-07-31', "dateRange": "3"},
-                        {"dateStart": '2019-08-01', "dateEnd": '2019-08-31', "dateRange": "3"},
-                        {"dateStart": '2019-09-01', "dateEnd": '2019-09-30', "dateRange": "3"}]
+                        {"dateStart": dt.datetime(2019, 7, 1).isoformat(), "dateEnd": dt.datetime(2019, 7, 31).isoformat(), "dateRange": "3"},
+                        {"dateStart": dt.datetime(2019, 8, 1).isoformat(), "dateEnd": dt.datetime(2019, 8, 31).isoformat(), "dateRange": "3"},
+                        {"dateStart": dt.datetime(2019, 9, 1).isoformat(), "dateEnd": dt.datetime(2019, 9, 30).isoformat(), "dateRange": "3"}]
         return query_string
 
     return compose_querystring()
@@ -145,7 +142,7 @@ def get_querystring():
     """
     global querystring
     if not querystring:
-        today = datetime.date.today()
+        today = dt.date.today()
         first_day_this_month = today.replace(day=1)
         first_day_next_month = first_day_this_month.replace(month=(today.month % 12 + 1))
         querystring = {"dateStart": first_day_this_month, "dateEnd":first_day_next_month, "dateRange":"3"}
